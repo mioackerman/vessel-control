@@ -9,12 +9,10 @@ def launch(conn, vessel):
     else:
         print(' Vessel "floater" activated.')
 
-    landing_thread = threading.Thread(target=landing_monitor, args=(conn, vessel), daemon=True)
+    landing_thread = threading.Thread(target=landing_monitor, args=(conn, vessel), daemon=False)
     landing_thread.start()
 
     stabilization(conn, vessel)
     rolling_control(conn, vessel)
 
-    landing_thread = threading.Thread(target=emergency_landing, args=(conn, vessel), daemon=True)
-    landing_thread.start()
 
