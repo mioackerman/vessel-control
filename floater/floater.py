@@ -1,10 +1,10 @@
 from floater.control import stabilization, rolling_control, landing_monitor
-from floater.emergency import emergency_landing
+from floater.emergency_equipment import emergency_landing
 import threading
 import time
 
 def launch(conn, vessel):
-    if vessel.name.lower() != 'floater':
+    if not vessel.name.lower().startswith('floater'):
         raise Exception('Not floater, choose correct control protocol.')
     else:
         print(' Vessel "floater" activated.')
