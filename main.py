@@ -1,5 +1,5 @@
 import krpc
-import floater
+from floater import floater
 
 try:
     conn = krpc.connect(
@@ -9,13 +9,21 @@ try:
         stream_port=50001
     )
     vessel = conn.space_center.active_vessel
-    print("Connected to: ", vessel.name)
+    print("✅ Connected to:", vessel.name)
 except Exception as e:
-    print('Fail to connect: ', e)
+    print("❌ Failed to connect:", e)
+    exit(1)
 
-if vessel.name == 'floater':
-    print('Run floater protocol')
-    floater.run(conn, vessel)
+print("\nSelect protocol:")
+print("1. Floater launch")
 
+choice = input("Enter number: ").strip()
 
+if not choice:
+    print("⚠️ No input received. Exiting.")
+    exit(0)
 
+if choice == "1":
+    floater.launch(conn, vessel)
+else:
+    print("⚠️ Unknown selection. Exit.")
