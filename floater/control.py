@@ -6,6 +6,8 @@ emergency_event = Event()
 SAFETY_ALTITUDE = 500
 STANDARD_ALTITUDE = 1000
 CRITICAL_SPEED = 20.0
+CRITICAL_ALTITUDE = 50
+LANDING_TOLERANCE = 5
 
 
 def rolling_control(conn, vessel):
@@ -103,61 +105,154 @@ def stabilization(conn, vessel):
             else:
                 stable_start = None
 
-            #print(f"[高度] {alt:.2f}m  [误差] {error:.2f}  [推力] {vessel.control.throttle:.2f}  in_range={in_range}")
+            # print(f"[高度] {alt:.2f}m  [误差] {error:.2f}  [推力] {vessel.control.throttle:.2f}  in_range={in_range}")
             time.sleep(0.1)
 
 
 def landing_monitor(conn, vessel):
+    from math import sqrt
+
+    time.sleep(5)  # 等待发射
     landing_lock = True
+    is_landing = False
+    vessel.control.gear = True
+    vessel.control.sas = True
+
+    ref = vessel.orbit.body.reference_frame
+    surf = vessel.surface_reference_frame
+    gravity = vessel.orbit.body.surface_gravity
+
+    def should_emergency_brake(altitude, vertical_speed):
+        v = -vertical_speed  # 向下速度为正
+        d_stop = (v ** 2) / (2 * a_net)
+        print(f"🔍 当前高度: {altitude:.1f}m, 速度: {vertical_speed:.1f}m/s, 预计减速距离: {d_stop:.1f}m")
+        return d_stop + 40 >= altitude and vertical_speed <= 0
 
     while True:
-        altitude = vessel.flight(vessel.surface_reference_frame).surface_altitude
-        speed = vessel.flight(vessel.orbit.body.reference_frame).vertical_speed
-        print('altitude: %.1f' % altitude)
-        print('velocity: %.1f' % speed)
+        mass = vessel.mass
+        max_thrust = vessel.available_thrust
+        TWR = max_thrust / (mass * gravity)
+        #print(f" 推重比: {TWR:.2f}, 减速度: {a_net:.2f} m/s²")
+        a_net = max((TWR - 1) * gravity, 0.1)
+        altitude = vessel.flight(surf).surface_altitude
+        speed = vessel.flight(ref).vertical_speed
+
         if altitude > SAFETY_ALTITUDE:
             vessel.control.gear = False
             landing_lock = False
-        else:
-            vessel.control.gear = True
+            continue
+        if altitude < SAFETY_ALTITUDE and landing_lock == False:
+            is_landing = True
+        vessel.control.gear = True
 
-        if altitude < SAFETY_ALTITUDE and landing_lock is False:
-            print("EMERGENCY LANDING")
-            emergency_event.set()
-            if altitude < SAFETY_ALTITUDE and -speed > CRITICAL_SPEED:
-                vessel.control.toggle_action_group(2)  # parachute eject
-                vessel.control.gear = True
-                print('emergency stage 1')
-                vessel.control.throttle = 1.0
-                time.sleep(1.5)
-                print('stage 1 end')
-            if -speed > CRITICAL_SPEED and altitude < 100:
-                vessel.control.toggle_action_group(1)
-                vessel.control.throttle = 0.0
-                print('emergency stage 2')
-            elif -speed <= CRITICAL_SPEED and altitude >= 100:
-                print('emergency stage 2.1')
-                while altitude > 30:
-                    altitude = vessel.flight(vessel.surface_reference_frame).surface_altitude
-                    speed = vessel.flight(vessel.orbit.body.reference_frame).vertical_speed
-                    vessel.control.throttle = 0.1
-                    print('2.1: %.1f' % altitude)
-                    if -speed >= CRITICAL_SPEED and altitude <= 30:
-                        print('emergency stage 4')
-                        vessel.control.throttle = 0.0
-                        vessel.control.toggle_action_group(1)
-            else:
-                while altitude > 30 and -speed > CRITICAL_SPEED:
-                    altitude = vessel.flight(vessel.surface_reference_frame).surface_altitude
-                    speed = vessel.flight(vessel.orbit.body.reference_frame).vertical_speed
-                    vessel.control.throttle = 0.8
-                    if -speed >= CRITICAL_SPEED and altitude <= 30:
-                        print('emergency stage 4')
-                        vessel.control.throttle = 0.0
-                        vessel.control.toggle_action_group(1)
-                vessel.control.throttle = 0.0
+        if altitude < LANDING_TOLERANCE:
             vessel.control.throttle = 0.0
-            print('emergency end')
-
+            print("Touch ground，end monitor")
             break
-        time.sleep(0.001)
+
+        # ✅ 紧急判断
+        if not landing_lock and is_landing:
+            if should_emergency_brake(altitude, speed):
+                print("🚨 应急着陆触发：速度过快，空间不足")
+                emergency_event.set()
+                emergency_rocket(conn, vessel)
+                break
+            else:
+                print("🟢 进入平稳着陆模式")
+                emergency_event.set()  # 通知其他线程停止控制
+                gentle_landing_pid_control(conn, vessel)
+
+        print('altitude: %.1f, speed: %.1f' % (altitude, speed))
+
+
+def gentle_landing_pid_control(conn, vessel, target_speed=-10):
+    print("🛬 超高速软着陆控制启动")
+    pid = PID(Kp=0.15, Ki=0.002, Kd=0.25, output_limits=(0.0, 1.0))
+    ref = vessel.orbit.body.reference_frame
+
+    gravity = vessel.orbit.body.surface_gravity
+    mass = vessel.mass
+    max_thrust = vessel.available_thrust
+    TWR = max_thrust / (mass * gravity)
+    a_net = (TWR - 1) * gravity  # 可用减速度
+
+    vessel.control.gear = True
+    vessel.control.sas = True
+
+    last_time = time.time()
+
+    while True:
+
+
+        now = time.time()
+        dt = now - last_time
+        last_time = now
+
+        flight = vessel.flight(vessel.surface_reference_frame)
+        alt = flight.surface_altitude
+        vs = vessel.flight(ref).vertical_speed  # vs < 0 表示下落
+
+        if alt > 100:pid = PID(Kp=0.15, Ki=0.002, Kd=0.25, output_limits=(0.0, 1.0))
+        elif 100>alt>15: pid = PID(Kp=0.05, Ki=0.002, Kd=0.25, output_limits=(0.0, 1.0))
+        else: pid = PID(Kp=0.03, Ki=0.002, Kd=0.25, output_limits=(0.0, 1.0))
+
+        if alt > 300:
+            target_speed = -60
+        elif alt > 100:
+            target_speed = -30
+        else:
+            target_speed = -3
+
+        if alt < CRITICAL_ALTITUDE and -vs > CRITICAL_SPEED:
+            print("🚨 应急着陆触发：速度过快，空间不足")
+            emergency_event.set()
+            emergency_rocket(conn, vessel)
+            break
+
+        if alt < LANDING_TOLERANCE:
+            vessel.control.throttle = 0.0
+            print("✅ 已接触地面，结束控制")
+            break
+
+        # ========== 🧠 减速距离估算 ==========
+        v = abs(vs)  # 取绝对值
+        if v > 0.1 and a_net > 0:
+            d_stop = (v ** 2) / (2 * a_net)
+        else:
+            d_stop = 0
+
+        print(f"🔍 高度: {alt:.1f} m 速度: {vs:.1f} m/s 所需减速距离: {d_stop:.1f} m")
+
+        # ========== 🚀 第一阶段：必须硬减速 ==========
+        if d_stop + 20 > alt > SAFETY_ALTITUDE:
+            vessel.control.throttle = 1.0
+            print("⚠️ 强制最大推力刹车中")
+        # ========== 🪂 第二阶段：PID微调 ==========
+        elif SAFETY_ALTITUDE > alt > LANDING_TOLERANCE:
+            error = target_speed - vs
+            control = pid.update(error, dt)
+            vessel.control.throttle = control
+            print(f"[PID] 推力控制: {control:.2f}")
+        else:
+            vessel.control.throttle = 0.0
+
+        time.sleep(0.005)
+
+
+def emergency_rocket(conn, vessel):
+    print('emergency stage 4')
+    vessel.control.gear = True
+    vessel.control.toggle_action_group(2)
+
+    ref = vessel.orbit.body.reference_frame
+    surf = vessel.surface_reference_frame
+    alt = vessel.flight(surf).surface_altitude
+    vs = vessel.flight(ref).vertical_speed
+    while alt > CRITICAL_ALTITUDE and -vs > CRITICAL_SPEED:
+        vessel.control.throttle = 1
+        alt = vessel.flight(surf).surface_altitude
+        vs = vessel.flight(ref).vertical_speed
+    vessel.control.throttle = 0.0
+    vessel.control.toggle_action_group(1)
+    time.sleep(0.5)
+    vessel.control.toggle_action_group(3)

@@ -4,7 +4,7 @@ import threading
 import time
 
 def launch(conn, vessel):
-    if vessel.name.lower() != 'floater':
+    if not vessel.name.lower().startswith('floater'):
         raise Exception('Not floater, choose correct control protocol.')
     else:
         print(' Vessel "floater" activated.')
@@ -16,3 +16,11 @@ def launch(conn, vessel):
     rolling_control(conn, vessel)
 
 
+def landing(conn, vessel):
+    if not vessel.name.lower().startswith('floater'):
+        raise Exception('Not floater, choose correct control protocol.')
+    else:
+        print(' Vessel "floater" activated.')
+
+    landing_thread = threading.Thread(target=landing_monitor, args=(conn, vessel), daemon=False)
+    landing_thread.start()

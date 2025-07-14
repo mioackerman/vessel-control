@@ -16,6 +16,7 @@ except Exception as e:
 
 print("\nSelect protocol:")
 print("1. Floater launch")
+print("2. Float landing")
 
 choice = input("Enter number: ").strip()
 
@@ -25,5 +26,7 @@ if not choice:
 
 if choice == "1":
     floater.launch(conn, vessel)
+elif choice == "2":
+    floater.landing(conn, vessel)
 else:
     print("⚠️ Unknown selection. Exit.")
