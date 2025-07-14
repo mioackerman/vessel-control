@@ -28,5 +28,7 @@ if choice == "1":
     floater.launch(conn, vessel)
 elif choice == "2":
     floater.landing(conn, vessel)
+elif choice == "3":
+    floater.landing_test(conn, vessel)
 else:
     print("⚠️ Unknown selection. Exit.")

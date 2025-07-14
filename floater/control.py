@@ -1,13 +1,44 @@
+import math
 import time
 from pid import PID
 from threading import Event
 
 emergency_event = Event()
 SAFETY_ALTITUDE = 500
-STANDARD_ALTITUDE = 1000
+STANDARD_ALTITUDE = 10000
 CRITICAL_SPEED = 20.0
 CRITICAL_ALTITUDE = 50
 LANDING_TOLERANCE = 5
+
+
+def landing_test_launch(conn, vessel):
+    if not emergency_event.is_set():
+        flight = vessel.flight
+        vref = vessel.orbit.body.reference_frame
+        sref = vessel.surface_reference_frame
+        alt = flight(sref).surface_altitude
+
+        vessel.control.sas = True
+        vessel.control.rcs = False
+
+        def energy_max(speed):
+            g = vessel.orbit.body.surface_gravity
+            speed_max_reach = speed >= math.sqrt(g * STANDARD_ALTITUDE)
+
+            return speed_max_reach, print('Height predict: %.1f'% (speed**2 / (2*g)))
+
+        vessel.control.activate_next_stage()
+        while True:
+            alt = vessel.flight(sref).surface_altitude
+            speed = flight(vref).vertical_speed
+
+            vessel.control.throttle = 1.0
+            if alt >= SAFETY_ALTITUDE and energy_max(speed):
+                vessel.control.gear = False
+                vessel.control.throttle = 0
+                print('landing test launch end normally.')
+                break
+        print('landing test launch end.')
 
 
 def rolling_control(conn, vessel):
@@ -132,10 +163,10 @@ def landing_monitor(conn, vessel):
         mass = vessel.mass
         max_thrust = vessel.available_thrust
         TWR = max_thrust / (mass * gravity)
-        #print(f" 推重比: {TWR:.2f}, 减速度: {a_net:.2f} m/s²")
+        # print(f" 推重比: {TWR:.2f}, 减速度: {a_net:.2f} m/s²")
         a_net = max((TWR - 1) * gravity, 0.1)
         altitude = vessel.flight(surf).surface_altitude
-        speed = vessel.flight(ref).vertical_speed
+        speed = vessel.flight(ref).vertical_speed  ## TODO
 
         if altitude > SAFETY_ALTITUDE:
             vessel.control.gear = False
@@ -152,10 +183,14 @@ def landing_monitor(conn, vessel):
 
         # ✅ 紧急判断
         if not landing_lock and is_landing:
-            if should_emergency_brake(altitude, speed):
+            if should_emergency_brake(altitude, speed) and -speed > CRITICAL_SPEED + 100:
                 print("🚨 应急着陆触发：速度过快，空间不足")
                 emergency_event.set()
-                emergency_rocket(conn, vessel)
+                vessel.control.toggle_action_group(2)
+                vessel.control.throttle = 0.0
+                vessel.control.toggle_action_group(1)
+                time.sleep(0.5)
+                vessel.control.toggle_action_group(3)
                 break
             else:
                 print("🟢 进入平稳着陆模式")
@@ -167,7 +202,7 @@ def landing_monitor(conn, vessel):
 
 def gentle_landing_pid_control(conn, vessel, target_speed=-10):
     print("🛬 超高速软着陆控制启动")
-    pid = PID(Kp=0.15, Ki=0.002, Kd=0.25, output_limits=(0.0, 1.0))
+    pid = PID(Kp=0.15, Ki=0.01, Kd=0.1, output_limits=(0.0, 1.0))
     ref = vessel.orbit.body.reference_frame
 
     gravity = vessel.orbit.body.surface_gravity
@@ -183,7 +218,6 @@ def gentle_landing_pid_control(conn, vessel, target_speed=-10):
 
     while True:
 
-
         now = time.time()
         dt = now - last_time
         last_time = now
@@ -192,9 +226,11 @@ def gentle_landing_pid_control(conn, vessel, target_speed=-10):
         alt = flight.surface_altitude
         vs = vessel.flight(ref).vertical_speed  # vs < 0 表示下落
 
-        if alt > 100:pid = PID(Kp=0.15, Ki=0.002, Kd=0.25, output_limits=(0.0, 1.0))
-        elif 100>alt>15: pid = PID(Kp=0.05, Ki=0.002, Kd=0.25, output_limits=(0.0, 1.0))
-        else: pid = PID(Kp=0.03, Ki=0.002, Kd=0.25, output_limits=(0.0, 1.0))
+        if alt > 200:
+            pid = PID(Kp=0.15, Ki=0.01, Kd=0.1, output_limits=(0.0, 1.0))
+        else:
+            pid = PID(Kp=0.03, Ki=0.01, Kd=0.1, output_limits=(0.0, 1.0))
+
 
         if alt > 300:
             target_speed = -60
@@ -236,7 +272,7 @@ def gentle_landing_pid_control(conn, vessel, target_speed=-10):
         else:
             vessel.control.throttle = 0.0
 
-        time.sleep(0.005)
+        time.sleep(0.001)
 
 
 def emergency_rocket(conn, vessel):
