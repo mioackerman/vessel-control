@@ -6,22 +6,19 @@ from threading import Event
 emergency_event = Event()
 
 STANDARD_ALTITUDE = 5000
-if (STANDARD_ALTITUDE / 4) >= 600:
-    SAFETY_ALTITUDE = STANDARD_ALTITUDE / 4
+if (STANDARD_ALTITUDE / 3) >= 600:
+    SAFETY_ALTITUDE = STANDARD_ALTITUDE / 3
 else:
     SAFETY_ALTITUDE = 600
 CRITICAL_SPEED = 20.0
 CRITICAL_ALTITUDE = 50
 CRITICAL_ALTITUDE_PID = 200
-LANDING_TOLERANCE = 5
+LANDING_TOLERANCE = 3
 DOB = 0
 
 
 def landing_test_launch(conn, vessel):
-    # vessel.auto_pilot.engage()
-    # vessel.auto_pilot.reference_frame = vessel.surface_reference_frame
     # vessel.auto_pilot.target_direction = (90, 0, 0)  # 表面参考系下，正上方
-    # vessel.auto_pilot.target_roll = 0
     if not emergency_event.is_set():
         print("Landing test launched")
         flight = vessel.flight
@@ -174,6 +171,7 @@ def landing_monitor(conn, vessel):
     import time
 
     time.sleep(5)  # 等待发射
+
     print('\rLanding Monitor Activated')
     landing_lock = True
     is_landing = False
@@ -237,10 +235,14 @@ def landing_monitor(conn, vessel):
 
         # ✅ 原有逻辑：应急刹车或平稳模式
         if not landing_lock and is_landing:
-            vessel.auto_pilot.engage()
-            vessel.auto_pilot.reference_frame = vessel.surface_reference_frame
-            vessel.auto_pilot.target_direction = (90, 0, 0)  # 表面参考系下，正上方
-            vessel.auto_pilot.target_roll = 0
+            # vessel.auto_pilot.engage()
+            # vessel.auto_pilot.reference_frame = vessel.surface_reference_frame
+            # vessel.control.sas_mode = vessel.control.sas_mode.retrograde
+            # # vessel.auto_pilot.target_direction = (90, 0, 0)  # 表面参考系下，正上方
+            # vessel.auto_pilot.target_roll = 0
+
+            vessel.control.sas = True
+            vessel.control.sas_mode = conn.space_center.SASMode.retrograde
 
             # ✅ 紧急条件检查：燃料不足 or 姿态错误
             if fuel_mass < fuel_needed or angle_error < 160:
@@ -317,8 +319,10 @@ def gentle_landing_pid_control(conn, vessel, target_speed=-10):
             target_speed = -30
         elif alt > 20:
             target_speed = -10
-        else:
+        elif alt > LANDING_TOLERANCE:
             target_speed = -1
+        else:
+            target_speed = 0
 
         if alt < CRITICAL_ALTITUDE and -vs > CRITICAL_SPEED and alt < DOB:
             print("\r❌ Speed over limit. Distance not enough. Emergency Rocket activated.")
