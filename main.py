@@ -17,6 +17,7 @@ except Exception as e:
 print("\nSelect protocol:")
 print("1. Floater launch")
 print("2. Float landing")
+print("3. Float Launch & Landing Test")
 
 choice = input("Enter number: ").strip()
 
