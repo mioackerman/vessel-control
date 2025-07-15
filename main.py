@@ -1,5 +1,8 @@
+import threading
+
 import krpc
 from floater import floater
+from floater.control_orientation_monitor import control_orientation
 
 try:
     conn = krpc.connect(
@@ -9,6 +12,7 @@ try:
         stream_port=50001
     )
     vessel = conn.space_center.active_vessel
+
     print("✅ Connected to:", vessel.name)
 except Exception as e:
     print("❌ Failed to connect:", e)

@@ -1,4 +1,5 @@
 import math
+import threading
 import time
 from pid import PID
 from threading import Event
@@ -6,10 +7,10 @@ from threading import Event
 emergency_event = Event()
 
 STANDARD_ALTITUDE = 5000
-if (STANDARD_ALTITUDE / 3) >= 600:
-    SAFETY_ALTITUDE = STANDARD_ALTITUDE / 3
+if (STANDARD_ALTITUDE / 4) >= 600:
+    LANDING_ALTITUDE = STANDARD_ALTITUDE / 4
 else:
-    SAFETY_ALTITUDE = 600
+    LANDING_ALTITUDE = 600
 CRITICAL_SPEED = 20.0
 CRITICAL_ALTITUDE = 50
 CRITICAL_ALTITUDE_PID = 200
@@ -41,11 +42,13 @@ def landing_test_launch(conn, vessel):
             speed = flight(vref).vertical_speed
 
             vessel.control.throttle = 1.0
-            if alt >= SAFETY_ALTITUDE and energy_max(speed):
+            if alt >= LANDING_ALTITUDE and energy_max(speed):
                 vessel.control.gear = False
                 vessel.control.throttle = 0
 
                 g = vessel.orbit.body.surface_gravity
+                global STANDARD_ALTITUDE
+                STANDARD_ALTITUDE = vessel.orbit.apoapsis_altitude
                 print(f'\rApex predict: {speed ** 2 / (2 * g) + 900:.1f} m   ')
                 print('\rlanding test launch end normally.')
                 break
@@ -165,6 +168,15 @@ def status_monitor(conn, vessel):
                 print(f"\raltitude: {altitude:.1f}m | speed: {speed:.1f}m/s", end='', flush=True)
                 time.sleep(0.2)
 
+def get_landing_altitude():
+    if (STANDARD_ALTITUDE / 4) >= 600:
+        return STANDARD_ALTITUDE / 4
+    else:
+        return 600
+def get_surface_altitude(conn, vessel):
+    surf = vessel.surface_reference_frame
+    surf_alt = vessel.flight(surf).surface_altitude
+    return surf_alt
 
 def landing_monitor(conn, vessel):
     from math import sqrt, acos, degrees
@@ -173,6 +185,7 @@ def landing_monitor(conn, vessel):
     time.sleep(5)  # 等待发射
 
     print('\rLanding Monitor Activated')
+
     landing_lock = True
     is_landing = False
     vessel.control.gear = True
@@ -219,14 +232,22 @@ def landing_monitor(conn, vessel):
             )
             angle_error = degrees(acos(dot))
 
+        LANDING_ALTITUDE = get_landing_altitude()
+
         # ✅ 高度控制逻辑
-        if altitude > SAFETY_ALTITUDE:
+        if altitude > LANDING_ALTITUDE:
             vessel.control.gear = False
             landing_lock = False
+            #print('\rLanding unlock: ', altitude, ' ', LANDING_ALTITUDE)
 
-        if altitude <= SAFETY_ALTITUDE and landing_lock == False:
+        if altitude <= LANDING_ALTITUDE and landing_lock == False:
             is_landing = True
             vessel.control.gear = True
+            print('\rLanding detected')
+            #print('\r Altitude: ', altitude, ' ', 'LANDING_ALTITUDE: ', LANDING_ALTITUDE)
+
+
+
 
         if altitude < LANDING_TOLERANCE:
             vessel.control.throttle = 0.0
@@ -235,22 +256,27 @@ def landing_monitor(conn, vessel):
 
         # ✅ 原有逻辑：应急刹车或平稳模式
         if not landing_lock and is_landing:
+            print('\rLanding mode activated')
+            #print(f'Thrust start at: {LANDING_ALTITUDE} m')
             # vessel.auto_pilot.engage()
             # vessel.auto_pilot.reference_frame = vessel.surface_reference_frame
             # vessel.control.sas_mode = vessel.control.sas_mode.retrograde
             # # vessel.auto_pilot.target_direction = (90, 0, 0)  # 表面参考系下，正上方
             # vessel.auto_pilot.target_roll = 0
 
-            vessel.control.sas = True
-            vessel.control.sas_mode = conn.space_center.SASMode.retrograde
+            # vessel.control.sas = True
+            # vessel.control.sas_mode = conn.space_center.SASMode.retrograde
+
+            vessel.control.toggle_action_group(4)
+            vessel.control.gear = True
 
             # ✅ 紧急条件检查：燃料不足 or 姿态错误
-            if fuel_mass < fuel_needed or angle_error < 160:
+            if fuel_mass < fuel_needed and angle_error < 90:
                 if fuel_mass < fuel_needed:
                     print('fule')
-                if angle_error < 160:
-                    print('angle')
-                print("\r❌ 燃料不足或姿态错误，执行紧急火箭！")
+                if angle_error < 90:
+                    print('angle ',angle_error)
+                print("\r❌ 燃料不足，执行紧急火箭！")
                 emergency_event.set()
                 emergency_rocket(conn, vessel)
                 break
@@ -282,8 +308,10 @@ def gentle_landing_pid_control(conn, vessel, target_speed=-10):
 
     last_time = time.time()
 
+
+
     while True:
-        thrust_strategy = ''
+
         now = time.time()
         dt = now - last_time
         last_time = now
@@ -294,7 +322,7 @@ def gentle_landing_pid_control(conn, vessel, target_speed=-10):
         thrust_limit_coefficient = 0.25
         if max_thrust != 0:
             thrust_limit_coefficient = 1.5 * mass * gravity / max_thrust
-            print('thrust coefficient: %.3f ' % thrust_limit_coefficient)
+            #print('thrust coefficient: %.3f ' % thrust_limit_coefficient)
 
         flight = vessel.flight(vessel.surface_reference_frame)
         alt = flight.surface_altitude
@@ -312,6 +340,7 @@ def gentle_landing_pid_control(conn, vessel, target_speed=-10):
         else:
             thrust_strategy = 'min'
             pid = PID(Kp=0.01, Ki=0.01, Kd=0.1, output_limits=(0.0, thrust_limit_coefficient))
+
 
         if alt > 300:
             target_speed = -60
@@ -332,6 +361,7 @@ def gentle_landing_pid_control(conn, vessel, target_speed=-10):
 
         if alt < LANDING_TOLERANCE:
             vessel.control.throttle = 0.0
+            vessel.control.toggle_action_group(4)
             print("\rTouched Ground, landing success.")
             break
 
@@ -342,7 +372,7 @@ def gentle_landing_pid_control(conn, vessel, target_speed=-10):
         else:
             d_stop = 0
 
-        if SAFETY_ALTITUDE > alt > LANDING_TOLERANCE:
+        if get_landing_altitude() > alt > LANDING_TOLERANCE:
             error = target_speed - vs
             control = pid.update(error, dt)
             vessel.control.throttle = control
@@ -351,6 +381,7 @@ def gentle_landing_pid_control(conn, vessel, target_speed=-10):
                   f"Speed: {vs:.1f} m/s "
                   f"DOB: {d_stop:.1f} m   "
                   f"Thrust Strategy: {thrust_strategy}  "
+                  f'thrust coefficient: {thrust_limit_coefficient:3f}  '
                   f"Thrust: {control:.3f}   ",
                   end='', flush=True)
         else:
@@ -376,3 +407,4 @@ def emergency_rocket(conn, vessel):
     vessel.control.toggle_action_group(1)
     time.sleep(0.5)
     vessel.control.toggle_action_group(3)
+

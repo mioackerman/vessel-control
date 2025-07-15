@@ -1,6 +1,7 @@
-from floater.control import stabilization, rolling_control, landing_monitor,landing_test_launch,status_monitor
+from floater.control import stabilization, rolling_control, landing_monitor, landing_test_launch, status_monitor
 import threading
 import time
+from floater.control_orientation_monitor import control_orientation
 
 
 def launch(conn, vessel):
@@ -9,7 +10,7 @@ def launch(conn, vessel):
     else:
         print('Vessel "floater" activated.')
 
-    landing_thread = threading.Thread(target=landing_monitor, args=(conn, vessel), daemon=False)
+    landing_thread = threading.Thread(target=landing_monitor, daemon=False)
     landing_thread.start()
 
     stabilization(conn, vessel)
@@ -38,5 +39,8 @@ def landing_test(conn, vessel):
 
     status_monitor_thread = threading.Thread(target=status_monitor, args=(conn, vessel), daemon=False)
     status_monitor_thread.start()
+
+    control_thread = threading.Thread(target=control_orientation, daemon=False)
+    control_thread.start()
 
     landing_test_launch(conn, vessel)
