@@ -5,7 +5,7 @@ from threading import Event
 
 emergency_event = Event()
 
-STANDARD_ALTITUDE = 2000
+STANDARD_ALTITUDE = 5000
 if (STANDARD_ALTITUDE / 4) >= 600:
     SAFETY_ALTITUDE = STANDARD_ALTITUDE / 4
 else:
@@ -14,6 +14,7 @@ CRITICAL_SPEED = 20.0
 CRITICAL_ALTITUDE = 50
 CRITICAL_ALTITUDE_PID = 200
 LANDING_TOLERANCE = 5
+DOB = 0
 
 
 def landing_test_launch(conn, vessel):
@@ -48,7 +49,7 @@ def landing_test_launch(conn, vessel):
                 vessel.control.throttle = 0
 
                 g = vessel.orbit.body.surface_gravity
-                print(f'\rApex predict: {speed ** 2 / (2 * g) + 900 :.1f} m   ')
+                print(f'\rApex predict: {speed ** 2 / (2 * g) + 900:.1f} m   ')
                 print('\rlanding test launch end normally.')
                 break
 
@@ -186,8 +187,9 @@ def landing_monitor(conn, vessel):
     def should_emergency_brake(altitude, vertical_speed):
         v = -vertical_speed  # 向下速度为正
         d_stop = (v ** 2) / (2 * a_net)
+        DOB = d_stop
         print(f"🔍 当前高度: {altitude:.1f}m, 速度: {vertical_speed:.1f}m/s, 预计减速距离: {d_stop:.1f}m")
-        return d_stop + 40 >= altitude and vertical_speed <= 0
+        return d_stop >= altitude and vertical_speed <= 0
 
     while True:
         mass = vessel.mass
@@ -226,7 +228,7 @@ def landing_monitor(conn, vessel):
 
         if altitude <= SAFETY_ALTITUDE and landing_lock == False:
             is_landing = True
-        vessel.control.gear = True
+            vessel.control.gear = True
 
         if altitude < LANDING_TOLERANCE:
             vessel.control.throttle = 0.0
@@ -296,7 +298,7 @@ def gentle_landing_pid_control(conn, vessel, target_speed=-10):
         alt = flight.surface_altitude
         vs = vessel.flight(ref).vertical_speed
 
-        if alt > SAFETY_ALTITUDE and -vs > CRITICAL_SPEED:
+        if alt > CRITICAL_ALTITUDE_PID and -vs > CRITICAL_SPEED:
             thrust_strategy = 'max'
             pid = PID(Kp=0.15, Ki=0.01, Kd=0.1, output_limits=(0.0, 1.0))
         elif alt >= CRITICAL_ALTITUDE_PID:
@@ -313,10 +315,12 @@ def gentle_landing_pid_control(conn, vessel, target_speed=-10):
             target_speed = -60
         elif alt > 100:
             target_speed = -30
+        elif alt > 20:
+            target_speed = -10
         else:
-            target_speed = -3
+            target_speed = -1
 
-        if alt < CRITICAL_ALTITUDE and -vs > CRITICAL_SPEED:
+        if alt < CRITICAL_ALTITUDE and -vs > CRITICAL_SPEED and alt < DOB:
             print("\r❌ Speed over limit. Distance not enough. Emergency Rocket activated.")
             emergency_event.set()
             emergency_rocket(conn, vessel)
