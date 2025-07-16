@@ -1,21 +1,22 @@
 import threading
 
+
 class TelemetryManager:
     _streams = {}
     _lock = threading.Lock()
     _initialized = False
-    
+
     @classmethod
     def init_streams(cls, conn, vessel):
         with cls._lock:
             if cls._initialized:
                 return
-            
+
             srf = vessel.surface_reference_frame
             orf = vessel.orbit.body.reference_frame
             flight_srf = vessel.flight(srf)
             flight_orb = vessel.flight(orf)
-            
+
             cls._streams = {
                 "altitude": conn.add_stream(getattr, flight_srf, "surface_altitude"),
                 "speed": conn.add_stream(getattr, flight_srf, "speed"),
@@ -29,14 +30,15 @@ class TelemetryManager:
                 "available_thrust": conn.add_stream(getattr, vessel, "available_thrust"),
                 "liquid_fuel": conn.add_stream(vessel.resources.amount, "LiquidFuel"),
                 "oxidizer": conn.add_stream(vessel.resources.amount, "Oxidizer"),
+                "bounding_box": conn.add_stream(vessel.bounding_box, srf),
             }
-      
-    @classmethod                         
+
+    @classmethod
     def get(cls, name):
         with cls._lock:
             stream = cls._streams.get(name)
             return stream() if stream else None
-    
+
     @classmethod
     def keys(cls):
         return list(cls._streams.keys())

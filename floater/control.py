@@ -25,10 +25,6 @@ def landing_test_launch(conn, vessel):
     # vessel.auto_pilot.target_direction = (90, 0, 0)  # 表面参考系下，正上方
     if not emergency_event.is_set():
         print("Landing test launched")
-        flight = vessel.flight
-        vref = vessel.orbit.body.reference_frame
-        sref = vessel.surface_reference_frame
-        alt = flight(sref).surface_altitude
 
         vessel.control.sas = True
         vessel.control.rcs = False
@@ -41,8 +37,6 @@ def landing_test_launch(conn, vessel):
 
         vessel.control.activate_next_stage()
         while True:
-            # alt = vessel.flight(sref).surface_altitude
-            # speed = flight(vref).vertical_speed
             alt = tm.get("altitude")
             vertical_speed = tm.get("vertical_speed")
 
@@ -159,7 +153,7 @@ def stabilization(conn, vessel):
             time.sleep(0.1)
 
 
-def status_monitor():
+def status_monitor(conn, vessel):
     if not emergency_event.is_set():
         print('Status Monitor Activated')
 
@@ -178,11 +172,6 @@ def get_landing_altitude():
         return STANDARD_ALTITUDE / 4
     else:
         return 600
-
-
-def get_surface_altitude():
-    surf_alt = tm.get("altitude")
-    return surf_alt
 
 
 def landing_monitor(conn, vessel):
@@ -251,7 +240,7 @@ def landing_monitor(conn, vessel):
             print('\rLanding detected')
             # print('\r Altitude: ', altitude, ' ', 'LANDING_ALTITUDE: ', LANDING_ALTITUDE)
 
-        if altitude <= LANDING_TOLERANCE:
+        if tm.get("altitude") <= LANDING_TOLERANCE:
             vessel.control.throttle = 0.0
             print("\rEnd monitor")
             break
@@ -357,7 +346,7 @@ def gentle_landing_pid_control(conn, vessel, target_speed=-10):
             emergency_rocket(conn, vessel)
             break
 
-        if alt <= LANDING_TOLERANCE:
+        if tm.get("altitude") <= LANDING_TOLERANCE:
             vessel.control.throttle = 0.0
             vessel.control.toggle_action_group(4)
             print("\rTouched Ground, landing success.")
@@ -403,3 +392,10 @@ def emergency_rocket(conn, vessel):
     vessel.control.toggle_action_group(1)
     time.sleep(0.5)
     vessel.control.toggle_action_group(3)
+
+
+def calculate_landing_tolerance(vessel):
+    global LANDING_TOLERANCE
+    srf = vessel.surface_reference_frame
+    bbox = vessel.bounding_box(srf)
+    LANDING_TOLERANCE = abs(bbox[0][1])
