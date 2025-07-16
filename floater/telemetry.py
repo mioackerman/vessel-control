@@ -22,7 +22,7 @@ class TelemetryManager:
                 "vertical_speed": conn.add_stream(getattr, flight_orb, "vertical_speed"),
                 "forward_vector": conn.add_stream(vessel.direction, srf),
                 "velocity_vector": conn.add_stream(getattr, flight_orb, "velocity"),
-                "retrograde_vector": conn.add_stream(getattr, flight_orb, "retrograde"),
+                "retrograde_vector": conn.add_stream(getattr, flight_srf, "retrograde"),
                 "mass": conn.add_stream(getattr, vessel, "mass"),
                 "gravity": conn.add_stream(getattr, vessel.orbit.body, "surface_gravity"),
                 "angular_velocity": conn.add_stream(vessel.angular_velocity, srf),
