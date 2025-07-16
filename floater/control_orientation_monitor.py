@@ -7,6 +7,8 @@ from floater import telemetry
 from floater.control import emergency_event, get_surface_altitude, LANDING_TOLERANCE, LANDING_ALTITUDE
 
 tm = telemetry.TelemetryManager
+
+
 def control_orientation():
     conn = krpc.connect(name='Orientation Control',
                         address='192.168.2.29',
@@ -30,7 +32,7 @@ def control_orientation():
         if tm.get("altitude") <= LANDING_ALTITUDE and landing_lock == False:
             is_landing = True
 
-        #print('get: ',tm.get("altitude"))
+        # print('get: ',tm.get("altitude"))
 
         if not landing_lock and is_landing:
             print('\rOrientation Control interrupting')
@@ -38,8 +40,8 @@ def control_orientation():
 
                 retrograde = vessel.flight(surf_frame).retrograde
                 # ship_dir = vessel.direction(vessel.surface_reference_frame)
-                x = (90,0,0)
-                y = (0,90,0)
+                x = (90, 0, 0)
+                y = (0, 90, 0)
 
                 # 计算 retrograde 与 up 的夹角
                 angle_x = angle_between(retrograde, x)
@@ -68,11 +70,9 @@ def control_orientation():
                 if tm.get("altitude") < LANDING_TOLERANCE:
                     break
 
-
-        if tm.get("altitude") < LANDING_TOLERANCE:
+        if tm.get("altitude") <= LANDING_TOLERANCE:
             print("\rAngle control end")
             break
-
 
 
 def angle_between(v1, v2):
@@ -80,5 +80,3 @@ def angle_between(v1, v2):
     mag1 = math.sqrt(sum(a * a for a in v1))
     mag2 = math.sqrt(sum(b * b for b in v2))
     return math.degrees(math.acos(dot / (mag1 * mag2)))
-
-

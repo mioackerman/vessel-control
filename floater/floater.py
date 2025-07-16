@@ -2,15 +2,10 @@ from floater.control import stabilization, rolling_control, landing_monitor, lan
 import threading
 import time
 from floater.control_orientation_monitor import control_orientation
-from floater import telemetry
-
-
 
 
 def init_floater(conn, vessel):
-    
-    ui(conn,vessel)
-
+    ui(conn, vessel)
 
 
 def ui(conn, vessel):
@@ -32,6 +27,7 @@ def ui(conn, vessel):
         landing_test(conn, vessel)
     else:
         print("⚠️ Unknown selection. Exit.")
+
 
 def launch(conn, vessel):
     if not vessel.name.lower().startswith('floater'):
@@ -61,7 +57,6 @@ def landing_test(conn, vessel):
         raise Exception('Not floater, choose correct control protocol.')
     else:
         print(' Vessel "floater" activated.')
-
 
     landing_thread = threading.Thread(target=landing_monitor, args=(conn, vessel), daemon=False)
     landing_thread.start()
