@@ -1,7 +1,6 @@
 import threading
-
 import krpc
-from floater import floater
+from floater import floater, telemetry
 from floater.control_orientation_monitor import control_orientation
 
 try:
@@ -17,23 +16,22 @@ try:
 except Exception as e:
     print("❌ Failed to connect:", e)
     exit(1)
+    
+telemetry.TelemetryManager.init_streams(conn, vessel)   # initiating telemetry manager
 
-print("\nSelect protocol:")
-print("1. Floater launch")
-print("2. Float landing")
-print("3. Float Launch & Landing Test")
+
+print("\nSelect vessel type:")
+print("\n1. Floater series")
 
 choice = input("Enter number: ").strip()
 
 if not choice:
-    print("⚠️ No input received. Exiting.")
-    exit(0)
+    # print("⚠️ No input received. Exiting.")
+    # exit(0)
+    floater.init_floater(conn, vessel)
 
-if choice == "1":
-    floater.launch(conn, vessel)
-elif choice == "2":
-    floater.landing(conn, vessel)
-elif choice == "3":
-    floater.landing_test(conn, vessel)
+elif choice == "1":
+    floater.init_floater(conn, vessel)
+
 else:
     print("⚠️ Unknown selection. Exit.")

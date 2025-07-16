@@ -3,9 +3,10 @@ import threading
 import time
 import krpc
 
+from floater import telemetry
 from floater.control import emergency_event, get_surface_altitude, LANDING_TOLERANCE, LANDING_ALTITUDE
 
-
+tm = telemetry.TelemetryManager
 def control_orientation():
     conn = krpc.connect(name='Orientation Control',
                         address='192.168.2.29',
@@ -23,13 +24,13 @@ def control_orientation():
 
     print('\rOrientation Control activated')
     while True:
-        if get_surface_altitude(conn, vessel) > LANDING_ALTITUDE:
+        if tm.get("altitude") > LANDING_ALTITUDE:
             landing_lock = False
 
-        if get_surface_altitude(conn, vessel) <= LANDING_ALTITUDE and landing_lock == False:
+        if tm.get("altitude") <= LANDING_ALTITUDE and landing_lock == False:
             is_landing = True
 
-        #print('get: ',get_surface_altitude(conn, vessel))
+        #print('get: ',tm.get("altitude"))
 
         if not landing_lock and is_landing:
             print('\rOrientation Control interrupting')
@@ -64,11 +65,11 @@ def control_orientation():
                     print("⚠ Retrograde not safe, pointing up")
 
                 time.sleep(0.2)
-                if get_surface_altitude(conn, vessel) < LANDING_TOLERANCE:
+                if tm.get("altitude") < LANDING_TOLERANCE:
                     break
 
 
-        if get_surface_altitude(conn,vessel) < LANDING_TOLERANCE:
+        if tm.get("altitude") < LANDING_TOLERANCE:
             print("\rAngle control end")
             break
 
