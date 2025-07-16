@@ -38,19 +38,19 @@ def control_orientation():
             print('\rOrientation Control interrupting')
             while True:
 
-                retrograde = vessel.flight(surf_frame).retrograde
-                # ship_dir = vessel.direction(vessel.surface_reference_frame)
-                x = (90, 0, 0)
-                y = (0, 90, 0)
+                retrograde = tm.get("retrograde_vector")
+                print("Retrograde: ", retrograde)
+                # ship_dir = tm.get("forward_vector")
+                y = (0, 0, -1)
 
                 # 计算 retrograde 与 up 的夹角
-                angle_x = angle_between(retrograde, x)
+
                 angle_y = angle_between(retrograde, y)
-                print(f" Angle to x: {angle_x:.2f}° ")
+
                 print(f" Angle to y: {angle_y:.2f}° ")
 
                 vessel.control.sas = True
-                if 75 <= angle_x <= 115 and 75 <= angle_y <= 115:
+                if 0 <= angle_y <= 30:
                     # 如果 retrograde 足够接近垂直，则锁定逆行
                     try:
                         vessel.control.sas_mode = conn.space_center.SASMode.retrograde
@@ -70,7 +70,7 @@ def control_orientation():
                 if tm.get("altitude") < LANDING_TOLERANCE:
                     break
 
-        if tm.get("altitude") <= LANDING_TOLERANCE:
+        if tm.get("altitude") < LANDING_TOLERANCE:
             print("\rAngle control end")
             break
 
