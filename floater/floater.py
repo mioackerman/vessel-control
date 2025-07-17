@@ -6,6 +6,7 @@ import threading
 import time
 
 from floater.control_orientation_monitor import control_orientation
+from floater.main_control_loop import main_loop
 
 
 def init_floater(conn, vessel):
@@ -22,6 +23,7 @@ def ui(conn, vessel):
     print("1. Floater launch")
     print("2. Float landing")
     print("3. Float Launch & Landing Test")
+    print("4. Float launch mode 2")
 
     choice = input("Enter number: ").strip()
 
@@ -35,6 +37,8 @@ def ui(conn, vessel):
         landing(conn, vessel)
     elif choice == "3":
         landing_test(conn, vessel)
+    elif choice == "4":
+        landing_test_2(conn, vessel)
     else:
         print("⚠️ Unknown selection. Exit.")
 
@@ -83,10 +87,27 @@ def landing_test(conn, vessel):
     shared_data = manager.dict()
     shared_data['LANDING_ALTITUDE'] = LANDING_ALTITUDE
 
-    control_process = Process(target=control_orientation, args=(shared_data, ), daemon=False)
+    control_process = Process(target=control_orientation, args=(shared_data,), daemon=False)
     control_process.start()
 
     landing_test_launch(conn, vessel)
 
     control_process.join()
 
+
+def landing_test_2(conn, vessel):
+    if not vessel.name.lower().startswith('floater'):
+        raise Exception('Not floater, choose correct control protocol.')
+    else:
+        print(' Vessel "floater" activated.')
+
+    manager = Manager()
+    shared_data = manager.dict()
+    shared_data['LANDING_ALTITUDE'] = LANDING_ALTITUDE
+
+    control_process = Process(target=control_orientation, args=(shared_data,), daemon=False)
+    control_process.start()
+
+    main_loop(conn, vessel)
+
+    control_process.join()

@@ -37,33 +37,35 @@ def control_orientation(shared_data):
         # print('get: ',tm.get("altitude"))
 
         if not landing_lock and is_landing:
+            sas_state = 0
             print('\rOrientation Control interrupting')
+            vessel.control.sas = True
             while True:
-
                 retrograde = tm.get("retrograde_vector")
-                #print("Retrograde: ", retrograde)
                 y = (0, 0, -1)
 
                 # 计算 retrograde 与 up 的夹角
                 angle_y = angle_between(retrograde, y)
+                print(f"\rAngle to y: {angle_y:.2f}° ", end='', flush=True)
 
-                print(f" Angle to y: {angle_y:.2f}° ")
-
-                vessel.control.sas = True
                 if 5 <= angle_y <= 40:
-                    try:
-                        vessel.control.sas_mode = conn.space_center.SASMode.retrograde
-                        print("✅ Locking Retrograde")
-                    except Exception as e:
-                        print(f"⚠ Cannot set SAS mode")
+                    if sas_state != 1:
+                        try:
+                            vessel.auto_pilot.disengage()
+                            vessel.control.sas = True
+                            vessel.control.sas_mode = conn.space_center.SASMode.retrograde
+                            sas_state = 1
+                            print("✅ Locking Retrograde")
+                        except Exception as e:
+                            print(f"⚠ Cannot set SAS mode")
                 else:
                     # 否则指向垂直向上
-                    vessel.auto_pilot.engage()
-                    vessel.auto_pilot.reference_frame = surf_frame
-                    vessel.auto_pilot.target_direction = (90, 0, 0)
-
-                    # vessel.control.sas_mode = conn.space_center.SASMode.retrograde
-                    print("⚠ Retrograde not safe, pointing up")
+                    if sas_state != 2:
+                        vessel.auto_pilot.engage()
+                        vessel.auto_pilot.reference_frame = surf_frame
+                        vessel.auto_pilot.target_direction = (90, 0, 0)
+                        sas_state = 2
+                        print("\r⚠ Retrograde not safe, pointing up")
 
                 time.sleep(0.05)
                 if tm.get("altitude") <= LANDING_TOLERANCE:

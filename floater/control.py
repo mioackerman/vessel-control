@@ -248,15 +248,6 @@ def landing_monitor(conn, vessel):
         # ✅ 原有逻辑：应急刹车或平稳模式
         if not landing_lock and is_landing:
             print('\rLanding mode activated')
-            # print(f'Thrust start at: {LANDING_ALTITUDE} m')
-            # vessel.auto_pilot.engage()
-            # vessel.auto_pilot.reference_frame = vessel.surface_reference_frame
-            # vessel.control.sas_mode = vessel.control.sas_mode.retrograde
-            # # vessel.auto_pilot.target_direction = (90, 0, 0)  # 表面参考系下，正上方
-            # vessel.auto_pilot.target_roll = 0
-
-            # vessel.control.sas = True
-            # vessel.control.sas_mode = conn.space_center.SASMode.retrograde
 
             vessel.control.toggle_action_group(4)
             vessel.control.gear = True
@@ -264,7 +255,7 @@ def landing_monitor(conn, vessel):
             # ✅ 紧急条件检查：燃料不足 or 姿态错误
             if fuel_mass < fuel_needed and angle_error < 90:
                 if fuel_mass < fuel_needed:
-                    print('fule')
+                    print('fuel')
                 if angle_error < 90:
                     print('angle ', angle_error)
                 print("\r❌ 燃料不足，执行紧急火箭！")
@@ -285,14 +276,8 @@ def landing_monitor(conn, vessel):
 def gentle_landing_pid_control(conn, vessel, target_speed=-10):
     global thrust_limit_coefficient
     print("\r🟢 软着陆控制启动")
-    pid = PID(Kp=0.15, Ki=0.01, Kd=0.1, output_limits=(0.0, 1.0))
 
     gravity = tm.get("gravity")
-    mass = tm.get("mass")
-    max_thrust = tm.get("available_thrust")
-    TWR = max_thrust / (mass * gravity)
-    a_net = (TWR - 1) * gravity
-
     vessel.control.gear = True
     vessel.control.sas = True
 
@@ -308,6 +293,7 @@ def gentle_landing_pid_control(conn, vessel, target_speed=-10):
         TWR = max_thrust / (mass * gravity)
         a_net = (TWR - 1) * gravity
         thrust_limit_coefficient = 0.25
+
         if max_thrust != 0:
             thrust_limit_coefficient = 1.5 * mass * gravity / max_thrust
             # print('thrust coefficient: %.3f ' % thrust_limit_coefficient)
