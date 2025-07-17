@@ -1,6 +1,7 @@
-from multiprocessing import Process
+from multiprocessing import Process, Manager
 
-from floater.control import stabilization, rolling_control, landing_monitor, landing_test_launch, status_monitor
+from floater.control import stabilization, rolling_control, landing_monitor, landing_test_launch, status_monitor, \
+    LANDING_ALTITUDE
 import threading
 import time
 
@@ -77,7 +78,12 @@ def landing_test(conn, vessel):
 
     # control_thread = threading.Thread(target=control_orientation, daemon=False)
     # control_thread.start()
-    control_process = Process(target=control_orientation, daemon=False)
+
+    manager = Manager()
+    shared_data = manager.dict()
+    shared_data['LANDING_ALTITUDE'] = LANDING_ALTITUDE
+
+    control_process = Process(target=control_orientation, args=(shared_data, ), daemon=False)
     control_process.start()
 
     landing_test_launch(conn, vessel)

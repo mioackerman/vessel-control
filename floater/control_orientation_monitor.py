@@ -4,12 +4,10 @@ import time
 import krpc
 
 from floater import telemetry
-from floater.control import emergency_event, LANDING_TOLERANCE, LANDING_ALTITUDE
+from floater.control import emergency_event, LANDING_TOLERANCE, LANDING_ALTITUDE, get_landing_altitude
 
 
-
-
-def control_orientation():
+def control_orientation(shared_data):
     conn = krpc.connect(name='Orientation Control',
                         address='192.168.2.29',
                         rpc_port=50000,
@@ -29,6 +27,7 @@ def control_orientation():
 
     print('\rOrientation Control activated')
     while True:
+        LANDING_ALTITUDE = shared_data.get('LANDING_ALTITUDE', 0)
         if tm.get("altitude") > LANDING_ALTITUDE:
             landing_lock = False
 

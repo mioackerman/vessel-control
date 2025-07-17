@@ -7,7 +7,7 @@ from threading import Event
 
 emergency_event = Event()
 
-STANDARD_ALTITUDE = 5000
+STANDARD_ALTITUDE = 1000
 if (STANDARD_ALTITUDE / 4) >= 600:
     LANDING_ALTITUDE = STANDARD_ALTITUDE / 4
 else:
