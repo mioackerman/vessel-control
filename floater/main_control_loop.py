@@ -9,7 +9,7 @@ from floater.telemetry import TelemetryManager as tm
 # ======== 参数配置 ========
 FRAME_DT = 0.05  # 20Hz
 STANDARD_ALTITUDE = 1000
-LANDING_ALTITUDE = 600
+LANDING_ALTITUDE = 1000
 CRITICAL_SPEED = 20.0
 CRITICAL_ALTITUDE = 50
 CRITICAL_ALTITUDE_PID = 200
@@ -66,26 +66,26 @@ def update_orientation(vessel, dt):
     return 0
 
 
-#     """姿态控制：平衡 pitch 和 roll"""
-#     angular_velocity = tm.get("angular_velocity")
-#     pitch_rate = -angular_velocity[0]
-#     roll_rate = -angular_velocity[2]
-#
-#     u_pitch = pid_pitch.update(pitch_rate, dt)
-#     u_roll = pid_roll.update(roll_rate, dt)
-#
-#     engines = [e for e in vessel.parts.engines if e.active]
-#     base_thrust = 0.6
-#     thrusts = [
-#         max(0.0, min(1.0, base_thrust + u_pitch - u_roll)),
-#         max(0.0, min(1.0, base_thrust + u_pitch + u_roll)),
-#         max(0.0, min(1.0, base_thrust - u_pitch - u_roll)),
-#         max(0.0, min(1.0, base_thrust - u_pitch + u_roll)),
-#     ]
-#     for i, e in enumerate(engines):
-#         e.thrust_limit = thrusts[i]
-#
-#
+    """姿态控制：平衡 pitch 和 roll"""
+    angular_velocity = tm.get("angular_velocity")
+    pitch_rate = -angular_velocity[0]
+    roll_rate = -angular_velocity[2]
+
+    u_pitch = pid_pitch.update(pitch_rate, dt)
+    u_roll = pid_roll.update(roll_rate, dt)
+
+    engines = [e for e in vessel.parts.engines if e.active]
+    base_thrust = 0.6
+    thrusts = [
+        max(0.0, min(1.0, base_thrust + u_pitch - u_roll)),
+        max(0.0, min(1.0, base_thrust + u_pitch + u_roll)),
+        max(0.0, min(1.0, base_thrust - u_pitch - u_roll)),
+        max(0.0, min(1.0, base_thrust - u_pitch + u_roll)),
+    ]
+    for i, e in enumerate(engines):
+        e.thrust_limit = thrusts[i]
+
+
 def update_thrust(vessel, dt):
     """软着陆 PID 控制"""
     alt = tm.get("altitude")
@@ -166,6 +166,7 @@ def main_loop(conn, vessel):
         # === 状态机 ===
         if STATE == "LAUNCH":
             vessel.control.throttle = 1.0
+
             print("\rLaunching", end='', flush=True)
 
             if altitude > get_landing_altitude() and landing_lock:  # ✅ 超过目标高度解锁
